@@ -17,7 +17,7 @@ namespace Callee
 
         private readonly TextMapPropagator _propagator = Propagators.DefaultTextMapPropagator;
 
-        private FileSystemWatcher watcher = new FileSystemWatcher(@"/home/heydenb/workspace/valueblue/drop");
+        private FileSystemWatcher watcher = new FileSystemWatcher(@"/home/heydenb/valueblue/drop");
 
         public void StartListening()
         {
@@ -70,7 +70,7 @@ namespace Callee
             string incomingDynatraceStringTag = parentContext.Baggage.GetBaggage("dtSDKTag"); // retrieve from incoming call metadata
             // link both sides of the remote call together
             incomingRemoteCallTracer.SetDynatraceStringTag(incomingDynatraceStringTag);
-            incomingRemoteCallTracer.SetProtocolName("ServiceFabricRemotingV2");
+            incomingRemoteCallTracer.SetProtocolName("NServiceBus");
 
             incomingRemoteCallTracer.Start();
             try
