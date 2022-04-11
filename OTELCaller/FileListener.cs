@@ -94,7 +94,7 @@ namespace Caller
             IOutgoingRemoteCallTracer outgoingRemoteCallTracer = Program.oneAgentSdk.TraceOutgoingRemoteCall(
                 "RemoteOnFileChanged", "RemoteOTELCallee",
                 "sfrv2://endpoint/service", ChannelType.TCP_IP, "wherever:1234");
-            outgoingRemoteCallTracer.SetProtocolName("ServiceFabricRemotingV2");
+            outgoingRemoteCallTracer.SetProtocolName("NServiceBus");
 
             outgoingRemoteCallTracer.Start();
             try
