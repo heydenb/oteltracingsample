@@ -21,7 +21,7 @@ namespace Caller
 
         public void StartListening()
         {
-            using var watcher = new FileSystemWatcher(@"/home/heydenb/workspace/valueblue/drop");
+            using var watcher = new FileSystemWatcher(@"/home/heydenb/workspace/drop");
 
             watcher.NotifyFilter = NotifyFilters.Attributes
                                  | NotifyFilters.CreationTime
@@ -140,7 +140,7 @@ namespace Caller
         }
 
         private static void WriteTraceContextToFile(Dictionary<string, string> props){
-            using (StreamWriter file = new StreamWriter(string.Format(@"/home/heydenb/workspace/valueblue/drop/protocol-{0}.out", random.NextDouble().ToString())))
+            using (StreamWriter file = new StreamWriter(string.Format(@"/home/heydenb/workspace/drop/protocol-{0}.out", random.NextDouble().ToString())))
                 foreach (var entry in props){
                     file.WriteLine("{0}:{1}", entry.Key, entry.Value);
                 }
