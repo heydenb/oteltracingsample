@@ -9,141 +9,50 @@ namespace Caller
     using System;
     using System.IO;
     using Dynatrace.OneAgent.Sdk.Api;
-    using Dynatrace.OneAgent.Sdk.Api.Enums;
-    using Dynatrace.OneAgent.Sdk.Api.Infos;
 
-    class FileListener
+    class Program
     {
+        public static ActivitySource MainActivitySource;
 
-        private readonly TextMapPropagator _propagator = Propagators.DefaultTextMapPropagator;
+        public static IOneAgentSdk oneAgentSdk = OneAgentSdkFactory.CreateInstance();
 
-        private static Random random = new Random();  
+        //public static ITracer MainTracer;
 
-        public void StartListening()
+        static void Main(string[] args)
         {
-            using var watcher = new FileSystemWatcher(@"/home/heydenb/workspace/valueblue/drop");
+            var serviceName = "OTELCaller";
+            var serviceVersion = "1.0.0";
 
-            watcher.NotifyFilter = NotifyFilters.Attributes
-                                 | NotifyFilters.CreationTime
-                                 | NotifyFilters.DirectoryName
-                                 | NotifyFilters.FileName
-                                 | NotifyFilters.LastAccess
-                                 | NotifyFilters.LastWrite
-                                 | NotifyFilters.Security
-                                 | NotifyFilters.Size;
+            List<KeyValuePair<string, object>> dt_metadata = new List<KeyValuePair<string, object>>();
+            foreach (string name in new string[] {"dt_metadata_e617c525669e072eebe3d0f08212e8f2.properties", "/var/lib/dynatrace/enrichment/dt_metadata.properties"}) {
+                try {
+                    foreach (string line in System.IO.File.ReadAllLines(name.StartsWith("/var") ? name : System.IO.File.ReadAllText(name))) {
+                        var keyvalue = line.Split("=");
+                        dt_metadata.Add( new KeyValuePair<string, object>(keyvalue[0], keyvalue[1]));
+                    }
+                }
+                catch { }
+            }
 
-            watcher.Changed += OnChanged;
-            watcher.Created += OnCreated;
-            watcher.Deleted += OnDeleted;
-            watcher.Renamed += OnRenamed;
-            watcher.Error += OnError;
+            using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+                .SetSampler(new AlwaysOnSampler())
+                .AddSource(serviceName)
+                .SetResourceBuilder(
+                    ResourceBuilder.CreateDefault()
+                        .AddService(serviceName: serviceName, serviceVersion: serviceVersion)
+                        .AddAttributes(dt_metadata))
+                .AddConsoleExporter()
+                .Build();
+            
+            MainActivitySource = new ActivitySource(serviceName);
+            
+            var fl = new FileListener();
+            fl.StartListening();
 
-            watcher.Filter = "*.txt";
-            watcher.IncludeSubdirectories = false;
-            watcher.EnableRaisingEvents = true;
-
+            
             Console.WriteLine("Press enter to exit.");
             Console.ReadLine();
         }
 
-        private void OnChanged(object sender, FileSystemEventArgs e)
-        {
-            using var activity = Program.MainActivitySource.StartActivity("OnChanged");
-            if (e.ChangeType != WatcherChangeTypes.Changed)
-            {
-                return;
-            }
-            Console.WriteLine($"Changed: {e.FullPath}");
-        }
-
-        private void OnCreated(object sender, FileSystemEventArgs e)
-        {
-            using var activity = Program.MainActivitySource.StartActivity("OnCreated");
-            string value = $"Created: {e.FullPath}";
-            Console.WriteLine(value);
-        }
-
-        private void OnDeleted(object sender, FileSystemEventArgs e) =>
-            Console.WriteLine($"Deleted: {e.FullPath}");
-
-        private void OnRenamed(object sender, RenamedEventArgs e)
-        {
-            using var activity = Program.MainActivitySource.StartActivity("OnRenamed", ActivityKind.Producer);
-            Console.WriteLine($"Renamed:");
-            Console.WriteLine($"    Old: {e.OldFullPath}");
-            Console.WriteLine($"    New: {e.FullPath}");
-
-            var basicProps = new Dictionary<string, string>();
-            // Inject the ActivityContext into the message headers to propagate trace context to the receiving service.
-            ActivityContext contextToInject = default;
-            if (activity != null)
-            {
-                contextToInject = activity.Context;
-            }
-            else if (Activity.Current != null)
-            {
-                contextToInject = Activity.Current.Context;
-            }
-            _propagator.Inject(
-                new PropagationContext(contextToInject, Baggage.Current),
-                basicProps,
-                InjectTraceContextIntoDictionary);
-            
-            basicProps.ToList().ForEach(x => {Console.WriteLine(x.Key); Console.WriteLine(x.Value);});
-
-            IOutgoingRemoteCallTracer outgoingRemoteCallTracer = Program.oneAgentSdk.TraceOutgoingRemoteCall(
-                "RemoteOnFileChanged", "RemoteOTELCallee",
-                "sfrv2://endpoint/service", ChannelType.TCP_IP, "wherever:1234");
-            outgoingRemoteCallTracer.SetProtocolName("ServiceFabricRemotingV2");
-
-            outgoingRemoteCallTracer.Start();
-            try
-            {
-                string tag = outgoingRemoteCallTracer.GetDynatraceStringTag();
-                basicProps["baggage"]=basicProps["baggage"] + "," + string.Format("dtSDKTag={0}", tag);
-                WriteTraceContextToFile(basicProps);
-            }
-            catch (Exception ex)
-            {
-                outgoingRemoteCallTracer.Error(ex);
-                // handle or rethrow
-                throw ex;
-            }
-            finally
-            {
-                outgoingRemoteCallTracer.End();
-            }
-        }
-
-        private void OnError(object sender, ErrorEventArgs e) =>
-            PrintException(e.GetException());
-
-        private void PrintException(Exception? ex)
-        {
-            if (ex != null)
-            {
-                Console.WriteLine($"Message: {ex.Message}");
-                Console.WriteLine("Stacktrace:");
-                Console.WriteLine(ex.StackTrace);
-                Console.WriteLine();
-                PrintException(ex.InnerException);
-            }
-        }   
-
-        private static void InjectTraceContextIntoDictionary(
-            Dictionary<string, string> props, string key, string value)
-        {
-            if (key.Equals("X-dynaTrace")){
-                props["baggage"] = string.Format("X-dynaTrace={0}", value);
-            }
-            props[key] = value;
-        }
-
-        private static void WriteTraceContextToFile(Dictionary<string, string> props){
-            using (StreamWriter file = new StreamWriter(string.Format(@"/home/heydenb/workspace/valueblue/drop/protocol-{0}.out", random.NextDouble().ToString())))
-                foreach (var entry in props){
-                    file.WriteLine("{0}:{1}", entry.Key, entry.Value);
-                }
-        }
     }
 }
